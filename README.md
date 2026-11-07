@@ -20,6 +20,8 @@ Slow movement only taps. Miss the rhythm and a soft sound tells you the count st
 | Questions with a list | Options are read one at a time. Nod picks, shake moves on. |
 | Open questions | Read aloud, then answered on screen. |
 
+**On a Gemini Live call**, the call's voice asks, so you don't hear it twice. This plugin stays quiet on that session and only opens the gesture window once the voice has finished, then tells the call how you answered so it can confirm it. Questions on that session are left to the call. The two plugins talk through window events in Desktop, and nothing extra leaves the Mac.
+
 Settings are in **Settings → Plugins → AirPods Approvals**, including **Try it**, which practises the gesture without touching Hermes.
 
 ## Why a misread can't approve something by accident
