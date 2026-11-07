@@ -265,6 +265,9 @@ class Coordinator {
 
   note(item, outcome, detail) {
     this.last = { kind: item.kind, outcome, detail: detail || '' }
+    // Once Hermes has taken the answer, the helper plays how it landed.
+    const sound = { approved: 'approved', denied: 'denied', answered: 'approved', stale: 'failed', error: 'failed' }[outcome]
+    if (sound) this.link.send({ type: 'result', outcome: sound })
     this.onChange()
   }
 

@@ -44,6 +44,24 @@ final class Asking {
   func handle(_ message: [String: Any]) {
     switch message["type"] as? String {
     case "ask": ask(message)
+    case "result":
+      // The gesture's own confirm tone has finished by now; this is Hermes having taken it.
+      let outcome = message["outcome"] as? String ?? ""
+      sounds.start()
+      sounds.landed(outcome)
+      let words = ["approved": "Approved.", "denied": "Denied."]
+      if let text = words[outcome], gemini.hasKey, active == nil {
+        gemini.word(text) { [weak self] wav in
+          guard let self, self.active == nil, let wav else { return }
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard self.active == nil else { return }
+            _ = self.speech.play(wav: wav) {}
+          }
+        }
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+        if self?.active == nil { self?.sounds.stop() }
+      }
     case "setKey":
       let saved = gemini.setKey(message["key"] as? String ?? "")
       send(status.merging(["type": "status", "keySaved": saved]) { a, _ in a })

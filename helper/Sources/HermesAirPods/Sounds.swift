@@ -72,7 +72,7 @@ final class Sounds {
   /// Beats grow louder as the gesture builds. Shakes sit low in the ear; nods sit high, brighter
   /// above and darker below.
   func tap(axis: Axis, count: Int, direction: Int) {
-    let level = [0.18, 0.34, 0.55][max(0, min(count - 1, 2))]
+    let level = [0.3, 0.55, 0.85][max(0, min(count - 1, 2))]
     switch axis {
     case .shake:
       // Turning left is a positive yaw rate.
@@ -101,6 +101,26 @@ final class Sounds {
     play(tone(frequency: notes[0], seconds: 0.14, level: 0.3), at: ahead)
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [self] in
       play(tone(frequency: notes[1], seconds: 0.26, level: 0.3), at: ahead)
+    }
+  }
+
+  /// Plays once Hermes has taken the answer: the same boop as the beats, run as a quick phrase.
+  /// Approved climbs from below to above you; denied falls and moves from one ear to the other.
+  func landed(_ outcome: String) {
+    let steps: [(Double, AVAudio3DPoint)]
+    switch outcome {
+    case "approved":
+      steps = [(988, .init(x: 0, y: -1, z: -0.3)), (1319, .init(x: 0, y: 0, z: -1)), (1760, .init(x: 0, y: 1, z: -0.3))]
+    case "denied":
+      steps = [(523, .init(x: -1, y: 0, z: -0.3)), (440, .init(x: 0, y: 0, z: -1)), (330, .init(x: 1, y: 0, z: -0.3))]
+    default:
+      missed()
+      return
+    }
+    for (index, step) in steps.enumerated() {
+      DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.075) { [self] in
+        play(tone(frequency: step.0, seconds: index == 2 ? 0.22 : 0.08, level: 0.5), at: step.1)
+      }
     }
   }
 

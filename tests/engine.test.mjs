@@ -200,6 +200,23 @@ test('an open question is read aloud and never answered', async () => {
 })
 
 
+test('the helper hears how each answer landed', async () => {
+  const yes = harness()
+  yes.coordinator.offerApproval('s1', REQUEST)
+  await yes.settled()
+  assert.deepEqual(yes.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'approved' }])
+
+  const no = harness({ result: { answer: 'no' } })
+  no.coordinator.offerApproval('s1', REQUEST)
+  await no.settled()
+  assert.deepEqual(no.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'denied' }])
+
+  const late = harness({ pending: [] })
+  late.coordinator.offerApproval('s1', REQUEST)
+  await late.settled()
+  assert.deepEqual(late.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'failed' }])
+})
+
 // ── the helper link ─────────────────────────────────────────────────────────────────────────────
 
 const sign = async (secret, text) => createHmac('sha256', secret).update(text).digest('hex')

@@ -46,6 +46,7 @@ final class GeminiVoice {
     let key = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     SecItemDelete(Self.query as CFDictionary)
     cache.removeAll()
+    try? FileManager.default.removeItem(at: Self.savedWords)
     guard !key.isEmpty else {
       hasKey = false
       return true
@@ -59,6 +60,26 @@ final class GeminiVoice {
   }
 
   // MARK: Speech
+
+  /// Fixed words like "Approved." are kept on disk, so they cost one Gemini call ever. Prompts are
+  /// never written to disk, because they contain commands.
+  private static let savedWords = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    .appendingPathComponent("Hermes AirPods/Voice", isDirectory: true)
+
+  func word(_ text: String, then done: @escaping (Data?) -> Void) {
+    let file = Self.savedWords.appendingPathComponent("\(Self.model)-\(Self.voice)-\(text.filter(\.isLetter).lowercased()).wav")
+    if let saved = try? Data(contentsOf: file), saved.prefix(4) == Data("RIFF".utf8) {
+      done(saved)
+      return
+    }
+    audio(for: text) { wav in
+      if let wav {
+        try? FileManager.default.createDirectory(at: Self.savedWords, withIntermediateDirectories: true)
+        try? wav.write(to: file)
+      }
+      done(wav)
+    }
+  }
 
   /// Calls back on the main queue with WAV audio, or nil.
   func audio(for text: String, then done: @escaping (Data?) -> Void) {
