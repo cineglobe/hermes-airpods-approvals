@@ -1,5 +1,9 @@
 # AirPods Approvals for Hermes
 
+![A Hermes approval card above someone wearing AirPods](docs/banner.png)
+
+[Watch the 10-second film](docs/demo.mp4): a request read aloud, a shake, denied. The footage is AI-generated; the sounds are the plugin's own tones.
+
 When your Hermes agent needs a yes or no, it asks in your AirPods and you answer with your head. Nod to approve. Shake to deny. The answer drives the real Hermes approval, so you can step away from the screen and keep work moving.
 
 ## How it feels
