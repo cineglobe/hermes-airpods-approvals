@@ -372,10 +372,13 @@ const MAX_POLLED_SESSIONS = 12
 // Desktop copies the plugin's desktop/ folder here on the Mac, the helper's Swift source included.
 const PLUGIN_DIR = '~/.hermes/desktop-plugins/airpods-approvals'
 const INSTALLER = `${PLUGIN_DIR}/Install Helper.command`
-const SOURCE_URL = 'https://github.com/cineglobe/hermes-airpods-approvals/tree/v1.2.0/desktop/helper'
+const SOURCE_URL = 'https://github.com/cineglobe/hermes-airpods-approvals/tree/v1.3.0/desktop/helper'
 const INSTALL_MS = 10 * 60 * 1000
+const KEY_URL = 'https://aistudio.google.com/apikey'
+const MOTION_SETTINGS = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Motion'
+const BLUETOOTH_SETTINGS = 'x-apple.systempreferences:com.apple.Bluetooth-Settings.extension'
 
-const $state = atom({ helper: 'off', output: null, motionDenied: false, beats: 0, listening: false, missed: 0, asking: null, last: null, geminiKey: false, test: '' })
+const $state = atom({ helper: 'off', output: null, motion: 'undecided', motionAsked: false, motionDenied: false, beats: 0, listening: false, missed: 0, asking: null, last: null, geminiKey: false, test: '' })
 const $settings = atom({ ...DEFAULT_SETTINGS })
 
 let plugin = null
@@ -507,6 +510,7 @@ function syncLink() {
     helper: link.connected ? 'ready' : link.refused ? 'refused' : current === 'connecting' || current === 'installing' ? current : pairingToken() ? 'waiting' : 'off',
     output: status.output || null,
     motionDenied: Boolean(status.motionDenied),
+    motion: status.motion || (status.motionDenied ? 'denied' : 'undecided'),
     geminiKey: Boolean(status.geminiKey)
   })
 }
@@ -620,8 +624,7 @@ function helperText(state) {
   if (state.helper === 'connecting') return 'Connecting'
   if (state.helper === 'waiting') return 'Helper not running'
   if (state.helper === 'off') return 'Head tracking needs a small Mac app. Install builds it here from its source, in Terminal. Nothing is downloaded.'
-  if (state.motionDenied) return 'Motion access is off'
-  return state.output ? `Ready on ${state.output}` : 'Connect your AirPods'
+  return 'Installed and running'
 }
 
 const REASONS = {
@@ -657,9 +660,11 @@ function KeyRow({ state }) {
   }
   return jsx(ListRow, {
     title: 'Gemini key',
+    description: 'Gemini reads each request aloud in your AirPods. A free key from Google AI Studio is enough.',
     action: jsxs('span', {
       className: 'apa-key',
       children: [
+        jsx(Button, { onClick: () => void plugin.os.openExternal(KEY_URL), size: 'sm', type: 'button', variant: 'ghost', children: 'Get a free key' }),
         jsx(Input, {
           'aria-label': 'Gemini API key',
           autoComplete: 'off',
@@ -692,26 +697,70 @@ function HelperActions({ state }) {
   })
 }
 
+// Motion access is asked here, after saying why, so macOS's prompt never arrives mid-question.
+function MotionRow({ state }) {
+  if (state.motion === 'allowed') return jsx(ListRow, { title: 'Motion access', description: 'Allowed' })
+  if (state.motion === 'denied') {
+    return jsx(ListRow, {
+      title: 'Motion access',
+      description: 'Turned off. Turn on Hermes AirPods in Privacy & Security, under Motion & Fitness.',
+      action: jsx(Button, { onClick: () => void plugin.os.openExternal(MOTION_SETTINGS), size: 'sm', type: 'button', variant: 'outline', children: 'Open Settings' })
+    })
+  }
+  const allow = () => {
+    patch({ motionAsked: true })
+    link.send({ type: 'requestMotion' })
+    // The helper stops asking after two minutes; Allow comes back if the prompt was dismissed.
+    plugin.setTimeout(() => patch({ motionAsked: false }), 125000)
+  }
+  return jsx(ListRow, {
+    title: 'Motion access',
+    description: state.motionAsked
+      ? 'Choose Allow in the macOS prompt.'
+      : 'To see a nod or a shake, the helper reads your head movement from your AirPods. macOS asks once. It only reads while Hermes is asking you something, and nothing leaves this Mac.',
+    action: jsx(Button, { disabled: state.motionAsked, onClick: allow, size: 'sm', type: 'button', variant: 'default', children: 'Allow' })
+  })
+}
+
+function AirPodsRow({ state }) {
+  if (state.output) return jsx(ListRow, { title: 'AirPods', description: `Connected: ${state.output}` })
+  return jsx(ListRow, {
+    title: 'AirPods',
+    description: 'Put them in and connect them to this Mac.',
+    action: jsx(Button, { onClick: () => void plugin.os.openExternal(BLUETOOTH_SETTINGS), size: 'sm', type: 'button', variant: 'outline', children: 'Bluetooth' })
+  })
+}
+
+// Set up runs as steps: each one appears once the one before it is done.
+function SetupRows({ state, ready }) {
+  const rows = [jsx(ListRow, { title: 'Helper', description: helperText(state), action: state.helper === 'ready' ? null : jsx(HelperActions, { state }) }, 'helper')]
+  if (state.helper !== 'ready') return rows
+  rows.push(jsx(KeyRow, { state }, 'key'))
+  if (!state.geminiKey) return rows
+  rows.push(jsx(MotionRow, { state }, 'motion'))
+  if (state.motion !== 'allowed') return rows
+  rows.push(jsx(AirPodsRow, { state }, 'airpods'))
+  if (!state.output) return rows
+  rows.push(
+    jsx(ListRow, {
+      title: 'Try it',
+      description: state.test || 'Three quick beats: nod or shake',
+      action: jsxs('span', {
+        className: 'apa-try',
+        children: [jsx(Beats, { large: true }), jsx(Button, { disabled: !ready || Boolean(state.asking), onClick: () => void tryGesture(), size: 'sm', type: 'button', variant: 'outline', children: 'Start' })]
+      })
+    }, 'try')
+  )
+  return rows
+}
+
 function SettingsPage() {
   const state = useValue($state)
   const settings = useValue($settings)
-  const ready = state.helper === 'ready' && Boolean(state.output) && !state.motionDenied && state.geminiKey
+  const ready = state.helper === 'ready' && Boolean(state.output) && state.motion === 'allowed' && state.geminiKey
   return jsxs('div', {
     children: [
-      jsx(ListRow, {
-        title: 'Helper',
-        description: helperText(state),
-        action: state.helper === 'ready' ? null : jsx(HelperActions, { state })
-      }),
-      jsx(KeyRow, { state }),
-      jsx(ListRow, {
-        title: 'Try it',
-        description: state.test || 'Three quick beats',
-        action: jsxs('span', {
-          className: 'apa-try',
-          children: [jsx(Beats, { large: true }), jsx(Button, { disabled: !ready || Boolean(state.asking), onClick: () => void tryGesture(), size: 'sm', type: 'button', variant: 'outline', children: 'Start' })]
-        })
-      }),
+      ...SetupRows({ state, ready }),
       jsx(ListRow, { title: 'Last request', description: outcomeText(state.last) }),
       jsx(ToggleRow, { checked: settings.enabled, label: 'Answer with my head', onChange: on => saveSettings({ enabled: on }) }),
       jsx(ToggleRow, { checked: settings.confirmApprovals, label: 'Nod twice to approve', description: 'A second round before anything runs.', onChange: on => saveSettings({ confirmApprovals: on }) }),
@@ -773,6 +822,7 @@ export default {
 
     ctx.onEvent('*', hearEvent)
     ctx.setInterval(() => void poll(), POLL_MS)
+    ctx.setInterval(() => link.send({ type: 'status' }), POLL_MS)
     ctx.onDispose(() => link.close())
 
     ctx.registerMany([

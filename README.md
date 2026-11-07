@@ -28,7 +28,7 @@ Slow movement only taps. Miss the rhythm and a soft sound tells you the count st
 
 Settings are in **Settings → Plugins → AirPods Approvals**, including **Try it**, which practises the gesture without touching Hermes.
 
-![The plugin's settings page in Hermes Desktop](docs/settings.png)
+![Setting up the plugin in Hermes Desktop: the helper is installed, the Gemini key saved, and Motion access is next](docs/onboarding.png)
 
 ## Why a misread can't approve something by accident
 
@@ -60,9 +60,9 @@ Install it from **Capabilities → Plugins** in Hermes Desktop (choose **This de
 hermes plugins install cineglobe/hermes-airpods-approvals --enable
 ```
 
-Then open **Settings → Plugins → AirPods Approvals** and press **Install**. Terminal opens and builds the helper app from [its Swift source](https://github.com/cineglobe/hermes-airpods-approvals/tree/v1.2.0/desktop/helper), which ships with the plugin, then starts it, and the plugin connects by itself. Nothing is downloaded, and the app is signed for your Mac only, so it needs no notarisation. Building needs Apple's Command Line Tools; if they're missing, macOS offers to install them.
+Then open **Settings → Plugins → AirPods Approvals** and press **Install**. Terminal opens and builds the helper app from [its Swift source](https://github.com/cineglobe/hermes-airpods-approvals/tree/v1.3.0/desktop/helper), which ships with the plugin, then starts it, and the plugin connects by itself. Nothing is downloaded, and the app is signed for your Mac only, so it needs no notarisation. Building needs Apple's Command Line Tools; if they're missing, macOS offers to install them.
 
-Paste your Gemini key on the same page. Allow Motion access when macOS asks on the first question.
+The same page then walks through the rest, one step at a time: a Gemini key ([free from Google AI Studio](https://aistudio.google.com/apikey)), Motion access (it says why first, then macOS asks), your AirPods, and a practice round.
 
 ### Why a helper?
 

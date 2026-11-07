@@ -24,7 +24,40 @@ final class Motion: NSObject, CMHeadphoneMotionManagerDelegate {
     return status == .denied || status == .restricted
   }
 
+  /// For the settings page: "undecided", "allowed" or "denied".
+  var access: String {
+    switch CMHeadphoneMotionManager.authorizationStatus() {
+    case .authorized: return "allowed"
+    case .denied, .restricted: return "denied"
+    default: return "undecided"
+    }
+  }
+
+  /// Set up asks for Motion access ahead of the first question. Starting updates is what makes macOS
+  /// ask; they stop again once the person has answered, or after two minutes.
+  private var probing = false
+  func requestAccess(then done: @escaping () -> Void) {
+    guard undecided, !manager.isDeviceMotionActive else { return done() }
+    probing = true
+    manager.startDeviceMotionUpdates(to: queue) { _, _ in }
+    let deadline = Date().addingTimeInterval(120)
+    Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
+      guard let self else { return timer.invalidate() }
+      guard !self.undecided || Date() > deadline || !self.probing else { return }
+      timer.invalidate()
+      if self.probing {
+        self.probing = false
+        self.manager.stopDeviceMotionUpdates()
+      }
+      done()
+    }
+  }
+
   func start() {
+    if probing {
+      probing = false
+      manager.stopDeviceMotionUpdates()
+    }
     guard !manager.isDeviceMotionActive else { return }
     manager.startDeviceMotionUpdates(to: queue) { [weak self] motion, _ in
       guard let self, let motion else { return }

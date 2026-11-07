@@ -1,5 +1,5 @@
 name: airpods-approvals
-version: 1.2.0
+version: 1.3.0
 manifest_version: 2
 api_version: 1
 description: "Hear Hermes approvals and questions in your AirPods and answer with a nod or a shake. Hermes Desktop on macOS only, with a small helper app built on your Mac from source."

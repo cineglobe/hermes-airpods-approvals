@@ -11,7 +11,7 @@ app="$HOME/Applications/Hermes AirPods.app"
 
 echo "AirPods Approvals: building the helper app from source."
 echo "Source: $root/helper"
-echo "Read it online: https://github.com/cineglobe/hermes-airpods-approvals/tree/v1.2.0/desktop/helper"
+echo "Read it online: https://github.com/cineglobe/hermes-airpods-approvals/tree/v1.3.0/desktop/helper"
 echo
 
 # Swift comes with Apple's Command Line Tools. If they're missing, macOS offers to install them.

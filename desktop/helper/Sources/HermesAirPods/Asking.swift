@@ -39,7 +39,7 @@ final class Asking {
   var status: [String: Any] {
     [
       "output": AudioRoute.bluetoothOutputName ?? NSNull(), "motionDenied": motion.denied,
-      "motionAvailable": motion.available, "geminiKey": gemini.hasKey,
+      "motionAvailable": motion.available, "motion": motion.access, "geminiKey": gemini.hasKey,
     ]
   }
 
@@ -71,6 +71,12 @@ final class Asking {
       if message["id"] as? String == active?.id { finish(.cancelled) }
     case "status":
       send(status.merging(["type": "status"]) { a, _ in a })
+    case "requestMotion":
+      guard active == nil else { return }
+      motion.requestAccess { [weak self] in
+        guard let self else { return }
+        self.send(self.status.merging(["type": "status"]) { a, _ in a })
+      }
     default:
       break
     }
