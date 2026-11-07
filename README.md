@@ -28,6 +28,8 @@ Slow movement only taps. Miss the rhythm and a soft sound tells you the count st
 
 Settings are in **Settings → Plugins → AirPods Approvals**, including **Try it**, which practises the gesture without touching Hermes.
 
+![The plugin's settings page in Hermes Desktop](docs/settings.png)
+
 ## Why a misread can't approve something by accident
 
 A glance is as fast as a shake, so speed alone isn't safe. Gestures are recognised by rhythm, measured from real recordings ([docs/GESTURES.md](docs/GESTURES.md)).
