@@ -1,6 +1,6 @@
 # How gestures were measured
 
-The thresholds in `helper/Sources/AirPodsCore/BeatDetector.swift` come from a guided recording, kept as `helper/Tests/AirPodsCoreTests/Fixtures/recording-1.csv`: 8,994 samples at 50 per second, with one person wearing AirPods, mostly seated. It runs as a regression test.
+The thresholds in `desktop/helper/Sources/AirPodsCore/BeatDetector.swift` come from a guided recording, kept as `desktop/helper/Tests/AirPodsCoreTests/Fixtures/recording-1.csv`: 8,994 samples at 50 per second, with one person wearing AirPods, mostly seated. It runs as a regression test.
 
 ## Speed alone doesn't work
 

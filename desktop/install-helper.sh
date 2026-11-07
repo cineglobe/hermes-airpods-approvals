@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build the Mac helper from the source in helper/ and install it. Nothing is downloaded.
+# Build the Mac helper from the source in helper/ next to this script and install it. Nothing is downloaded.
 #
-#   scripts/install-helper.sh
+#   desktop/install-helper.sh   (Install in the plugin's settings runs it for you)
 #
 # macOS only allows head motion for a real app bundle started by Launch Services, so this builds a
 # small .app rather than a command-line tool. It needs the Xcode Command Line Tools.
@@ -9,7 +9,7 @@ set -euo pipefail
 
 name="Hermes AirPods"
 app="$HOME/Applications/$name.app"
-root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$(dirname "$0")" && pwd)"
 
 if [[ "$(uname)" != "Darwin" ]]; then
   echo "The helper runs on the Mac your AirPods connect to." >&2
@@ -33,4 +33,3 @@ codesign --force --sign - "$app"
 
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app"
 echo "Installed $app"
-echo "Open Hermes Desktop, then Settings > Plugins > AirPods Approvals, and press Connect."

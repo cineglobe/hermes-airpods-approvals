@@ -335,6 +335,14 @@ test('the token is offered to an unpaired helper only after Connect', async () =
   assert.equal(h.link.connected, true)
 })
 
+test('Install keeps pairing open while the helper builds, then it closes', () => {
+  const h = linkHarness()
+  h.link.pairSoon(1000, 10 * 60 * 1000)
+  assert.equal(h.link.pairUntil, 1000 + 10 * 60 * 1000)
+  h.link.pairSoon(1000)
+  assert.equal(h.link.pairUntil, 1000 + 20000)
+})
+
 test('a paired helper never gets the token, even during Connect', async () => {
   const h = linkHarness()
   h.link.pairSoon()

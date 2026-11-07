@@ -87,8 +87,9 @@ class HelperLink {
     this.refused = false
   }
 
-  pairSoon(now = Date.now()) {
-    this.pairUntil = now + 20000
+  // Opens pairing for a while. Connect needs seconds; Install keeps it open while the helper builds.
+  pairSoon(now = Date.now(), ms = 20000) {
+    this.pairUntil = now + ms
     this.refused = false
   }
 
@@ -365,9 +366,14 @@ class Coordinator {
 
 const PLUGIN_ID = 'airpods-approvals'
 const STYLE_ID = 'apa-plugin-style'
-const CSS = ".apa-chip { display: inline-flex; align-items: center; gap: 5px; height: 100%; padding: 0 6px; border: 0; background: none; color: inherit; font: inherit; font-size: 11px; cursor: pointer; }\n.apa-chip:hover { background: var(--dt-hover, color-mix(in srgb, currentColor 8%, transparent)); }\n.apa-beats { display: inline-flex; align-items: center; gap: 3px; }\n.apa-beat { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.22; transition: opacity 90ms ease-out, transform 90ms ease-out; }\n.apa-beat--on { opacity: 1; transform: scale(1.3); }\n.apa-beats--miss .apa-beat { animation: apa-miss 200ms ease-out; }\n.apa-beats--large { gap: 8px; }\n.apa-beats--large .apa-beat { width: 10px; height: 10px; }\n.apa-try { display: flex; align-items: center; gap: 12px; }\n.apa-key { display: flex; align-items: center; gap: 8px; }\n.apa-key input { width: 220px; }\n.apa-note { font-size: 12px; opacity: 0.7; }\n@keyframes apa-miss { 40% { transform: translateX(2px); } 80% { transform: translateX(-2px); } }\n@media (prefers-reduced-motion: reduce) {\n  .apa-beat { transition: none; }\n  .apa-beats--miss .apa-beat { animation: none; }\n}\n"
+const CSS = ".apa-chip { display: inline-flex; align-items: center; gap: 5px; height: 100%; padding: 0 6px; border: 0; background: none; color: inherit; font: inherit; font-size: 11px; cursor: pointer; }\n.apa-chip:hover { background: var(--dt-hover, color-mix(in srgb, currentColor 8%, transparent)); }\n.apa-beats { display: inline-flex; align-items: center; gap: 3px; }\n.apa-beat { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.22; transition: opacity 90ms ease-out, transform 90ms ease-out; }\n.apa-beat--on { opacity: 1; transform: scale(1.3); }\n.apa-beats--miss .apa-beat { animation: apa-miss 200ms ease-out; }\n.apa-beats--large { gap: 8px; }\n.apa-beats--large .apa-beat { width: 10px; height: 10px; }\n.apa-try { display: flex; align-items: center; gap: 12px; }\n.apa-helper { display: flex; align-items: center; gap: 4px; }\n.apa-key { display: flex; align-items: center; gap: 8px; }\n.apa-key input { width: 220px; }\n.apa-note { font-size: 12px; opacity: 0.7; }\n@keyframes apa-miss { 40% { transform: translateX(2px); } 80% { transform: translateX(-2px); } }\n@media (prefers-reduced-motion: reduce) {\n  .apa-beat { transition: none; }\n  .apa-beats--miss .apa-beat { animation: none; }\n}\n"
 const POLL_MS = 2000
 const MAX_POLLED_SESSIONS = 12
+// Desktop copies the plugin's desktop/ folder here on the Mac, the helper's Swift source included.
+const PLUGIN_DIR = '~/.hermes/desktop-plugins/airpods-approvals'
+const INSTALLER = `${PLUGIN_DIR}/Install Helper.command`
+const SOURCE_URL = 'https://github.com/cineglobe/hermes-airpods-approvals/tree/v1.2.0/desktop/helper'
+const INSTALL_MS = 10 * 60 * 1000
 
 const $state = atom({ helper: 'off', output: null, motionDenied: false, beats: 0, listening: false, missed: 0, asking: null, last: null, geminiKey: false, test: '' })
 const $settings = atom({ ...DEFAULT_SETTINGS })
@@ -463,12 +469,12 @@ function pairingToken() {
 
 // Connect makes the token here, starts the helper by opening its app, and offers the token over the
 // local socket. The helper takes it only if it has never been paired or Pair Again is open.
+function ensureToken() {
+  if (!pairingToken()) plugin.storage.set('token', randomHex(32))
+}
+
 async function connectHelper() {
-  let token = pairingToken()
-  if (!token) {
-    token = randomHex(32)
-    plugin.storage.set('token', token)
-  }
+  ensureToken()
   patch({ helper: 'connecting' })
   link.pairSoon()
   link.connect()
@@ -478,11 +484,27 @@ async function connectHelper() {
   }, 12000)
 }
 
+// Install opens the bundled installer in Terminal, which builds the helper from the source beside it
+// and starts it. Pairing stays open meanwhile, so the plugin connects the moment the helper is up.
+async function installHelper() {
+  ensureToken()
+  patch({ helper: 'installing' })
+  link.pairSoon(Date.now(), INSTALL_MS)
+  link.connect()
+  if (!(await plugin.os.openExternal(INSTALLER))) {
+    patch({ helper: 'missing' })
+    return
+  }
+  plugin.setTimeout(() => {
+    if (!link.connected && $state.get().helper === 'installing') patch({ helper: 'off' })
+  }, INSTALL_MS)
+}
+
 function syncLink() {
   const status = link.status || {}
   const current = $state.get().helper
   patch({
-    helper: link.connected ? 'ready' : link.refused ? 'refused' : current === 'connecting' ? 'connecting' : pairingToken() ? 'waiting' : 'off',
+    helper: link.connected ? 'ready' : link.refused ? 'refused' : current === 'connecting' || current === 'installing' ? current : pairingToken() ? 'waiting' : 'off',
     output: status.output || null,
     motionDenied: Boolean(status.motionDenied),
     geminiKey: Boolean(status.geminiKey)
@@ -592,11 +614,12 @@ function StatusChip() {
 }
 
 function helperText(state) {
-  if (state.helper === 'missing') return 'Helper not found'
+  if (state.helper === 'missing') return 'Helper not found. Install builds it on this Mac.'
+  if (state.helper === 'installing') return 'Building in Terminal. This takes about a minute.'
   if (state.helper === 'refused') return 'Choose Pair Again in the menu bar, then Connect'
   if (state.helper === 'connecting') return 'Connecting'
   if (state.helper === 'waiting') return 'Helper not running'
-  if (state.helper === 'off') return 'Not connected'
+  if (state.helper === 'off') return 'Head tracking needs a small Mac app. Install builds it here from its source, in Terminal. Nothing is downloaded.'
   if (state.motionDenied) return 'Motion access is off'
   return state.output ? `Ready on ${state.output}` : 'Connect your AirPods'
 }
@@ -654,6 +677,21 @@ function KeyRow({ state }) {
   })
 }
 
+// Source opens the helper's code for this version, so people can read what Install builds.
+function HelperActions({ state }) {
+  const paired = state.helper === 'waiting' || state.helper === 'refused' || state.helper === 'connecting'
+  const installing = state.helper === 'installing'
+  return jsxs('span', {
+    className: 'apa-helper',
+    children: [
+      jsx(Button, { onClick: () => void plugin.os.openExternal(SOURCE_URL), size: 'sm', type: 'button', variant: 'ghost', children: 'Source' }),
+      paired
+        ? jsx(Button, { onClick: () => void connectHelper(), size: 'sm', type: 'button', variant: 'default', children: 'Connect' })
+        : jsx(Button, { disabled: installing, onClick: () => void installHelper(), size: 'sm', type: 'button', variant: 'default', children: installing ? 'Installing' : 'Install' })
+    ]
+  })
+}
+
 function SettingsPage() {
   const state = useValue($state)
   const settings = useValue($settings)
@@ -663,7 +701,7 @@ function SettingsPage() {
       jsx(ListRow, {
         title: 'Helper',
         description: helperText(state),
-        action: state.helper === 'ready' ? null : jsx(Button, { onClick: () => void connectHelper(), size: 'sm', type: 'button', variant: 'default', children: 'Connect' })
+        action: state.helper === 'ready' ? null : jsx(HelperActions, { state })
       }),
       jsx(KeyRow, { state }),
       jsx(ListRow, {

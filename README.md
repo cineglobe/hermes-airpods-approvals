@@ -54,19 +54,15 @@ It reduces misreads rather than removing them. If you nod along to something dur
 
 ## Install
 
-The plugin has no server half, so it installs on the Mac. If Desktop is connected to a remote Hermes, choose **This device** when installing from **Capabilities → Plugins**, or run on the Mac:
+Install it from **Capabilities → Plugins** in Hermes Desktop (choose **This device** if Desktop is connected to a remote Hermes), or on the Mac:
 
 ```bash
-hermes plugins install airpods-approvals --enable
+hermes plugins install cineglobe/hermes-airpods-approvals --enable
 ```
 
-Then build the helper from the source the plugin came with. Nothing is downloaded:
+Then open **Settings → Plugins → AirPods Approvals** and press **Install**. Terminal opens and builds the helper app from [its Swift source](https://github.com/cineglobe/hermes-airpods-approvals/tree/v1.2.0/desktop/helper), which ships with the plugin, then starts it, and the plugin connects by itself. Nothing is downloaded, and the app is signed for your Mac only, so it needs no notarisation. Building needs Apple's Command Line Tools; if they're missing, macOS offers to install them.
 
-```bash
-~/.hermes/plugins/airpods-approvals/scripts/install-helper.sh
-```
-
-In Hermes Desktop, open **Settings → Plugins → AirPods Approvals**, press **Connect**, and paste your Gemini key. Allow Motion access when macOS asks on the first question.
+Paste your Gemini key on the same page. Allow Motion access when macOS asks on the first question.
 
 ### Why a helper?
 
@@ -102,10 +98,10 @@ hermes plugins validate .
 ```
 
 ```
-src/engine.mjs           what's asked, and when an answer may reach Hermes
-src/desktop.js           Desktop plugin shell and settings
-helper/Sources/AirPodsCore     gesture detection and session rules, tested against real recordings
-helper/Sources/HermesAirPods   motion, sound, Gemini speech, Keychain and the local connection
+src/engine.mjs                       what's asked, and when an answer may reach Hermes
+src/desktop.js                       Desktop plugin shell and settings
+desktop/helper/Sources/AirPodsCore   gesture detection and session rules, tested against real recordings
+desktop/helper/Sources/HermesAirPods motion, sound, Gemini speech, Keychain and the local connection
 ```
 
 MIT licensed. AirPods is a trademark of Apple Inc. This project isn't affiliated with Apple or Nous Research.

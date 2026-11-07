@@ -79,8 +79,9 @@ export class HelperLink {
     this.refused = false
   }
 
-  pairSoon(now = Date.now()) {
-    this.pairUntil = now + 20000
+  // Opens pairing for a while. Connect needs seconds; Install keeps it open while the helper builds.
+  pairSoon(now = Date.now(), ms = 20000) {
+    this.pairUntil = now + ms
     this.refused = false
   }
 

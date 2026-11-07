@@ -7,5 +7,5 @@ python3 "$here/scripts/build.py" --check
 node "$here/tests/engine.test.mjs"
 
 if [[ "$(uname)" == "Darwin" ]]; then
-  swift test --package-path "$here/helper" --scratch-path "${TMPDIR:-/tmp}/hermes-airpods-build-test"
+  swift test --package-path "$here/desktop/helper" --scratch-path "${TMPDIR:-/tmp}/hermes-airpods-build-test"
 fi
