@@ -10,6 +10,10 @@ public enum EndReason: String, Sendable {
   case lost
   case cancelled
   case unavailable
+  /// Motion was allowed but no readings came, usually because the AirPods aren't in.
+  case noMotion
+  /// Gemini's voice couldn't be had, so nothing was asked.
+  case noVoice
 }
 
 public enum SessionEffect: Equatable, Sendable {

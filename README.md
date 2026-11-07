@@ -38,60 +38,56 @@ It reduces misreads rather than removing them. If you nod along to something dur
 
 ## Requirements
 
-- A Mac with Hermes Desktop, and AirPods that report head motion (AirPods Pro, AirPods Max, AirPods 3 and later).
+- A Mac with Hermes Desktop, and AirPods that report head motion (AirPods Pro, AirPods Max, AirPods 3 and later). macOS only: head tracking is an Apple API.
 - macOS 14 or later, with the Xcode Command Line Tools to build the helper.
+- A Gemini API key, from [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
 - Hermes 0.22.5 or later.
 
 ## Install
 
-Install the plugin on your Hermes:
+The plugin has no server half, so it installs on the Mac. If Desktop is connected to a remote Hermes, choose **This device** when installing from **Capabilities → Plugins**, or run on the Mac:
 
 ```bash
 hermes plugins install airpods-approvals --enable
 ```
 
-Then build the helper on the Mac your AirPods connect to. It's built from the source in this repository, and nothing is downloaded:
+Then build the helper from the source the plugin came with. Nothing is downloaded:
 
 ```bash
-git clone https://github.com/cineglobe/hermes-airpods-approvals
-cd hermes-airpods-approvals
-scripts/install-helper.sh
+~/.hermes/plugins/airpods-approvals/scripts/install-helper.sh
 ```
 
-In Hermes Desktop, open **Settings → Plugins → AirPods Approvals** and press **Connect**. Allow Motion access when macOS asks.
+In Hermes Desktop, open **Settings → Plugins → AirPods Approvals**, press **Connect**, and paste your Gemini key. Allow Motion access when macOS asks on the first question.
 
 ### Why a helper?
 
-Head motion comes from Apple's `CMHeadphoneMotionManager`, which a Desktop plugin can't reach. macOS also only allows it from a real app started by Launch Services, so the helper is a small menu bar app. It's built on your own Mac because the Hermes catalog doesn't accept compiled binaries.
+Head motion comes from Apple's `CMHeadphoneMotionManager`, which a Desktop plugin can't reach. macOS also only allows it from a real app started by Launch Services, so the helper is a small app with no window, Dock icon or menu bar item. It's built on your own Mac because the Hermes catalog doesn't accept compiled binaries.
+
+Desktop starts it when it opens, and it quits by itself within 20 seconds of Desktop closing or the plugin being turned off.
 
 ### The voice
 
-With no setup, the Mac's own voice reads prompts. For a Gemini voice, give the Hermes backend a key:
-
-```bash
-hermes config set AIRPODS_APPROVALS_GEMINI_KEY <key from aistudio.google.com/apikey>
-```
-
-`GEMINI_API_KEY`, `GOOGLE_API_KEY` and `GEMINI_LIVE_API_KEY` also work. Hermes has to restart to load the speech route. If Gemini fails or runs out of quota, the Mac's voice takes over.
+Prompts are read by Gemini (`gemini-3.8-flash-tts`). The key goes from the settings page straight to the helper, which keeps it in your login Keychain. Desktop never stores it. If Gemini can't be reached or runs out of quota, nothing is read out: a short cancel sound plays and the request stays on screen.
 
 ## What it sends, reads and runs
 
-- **Network:** only for the optional Gemini voice, from the Hermes backend to `generativelanguage.googleapis.com`.
-- **Sent to Gemini:** the sentence being read: the approval's description and command, or the question and its choices. Hermes redacts secrets in commands first, but treat what's spoken as sent to Google. On Gemini's free tier, Google may use content to improve its products. With the Mac voice, nothing leaves your Mac.
+- **Network:** the helper sends each prompt to `generativelanguage.googleapis.com` to be spoken. Nothing else.
+- **Sent to Gemini:** the sentence being read: the approval's description and command, or the question and its choices. Hermes redacts secrets in commands first, but treat what's spoken as sent to Google. On Gemini's free tier, Google may use content to improve its products.
+- **Credentials:** your Gemini key, kept in the login Keychain by the helper and sent only to Google.
 - **Head motion:** read only while a question is open, handled on the Mac and never stored or sent anywhere. Only the answer leaves the helper.
-- **Background process:** the helper stays in the menu bar while Desktop is connected, and quits 10 minutes after it goes away.
-- **Local connection:** the helper listens on `127.0.0.1:47291`. Both sides prove they hold a pairing token, and browsers are refused by origin. The token sits in a file only your user can read.
+- **Background process:** the helper runs only while Hermes Desktop is open with the plugin on.
+- **Local connection:** the helper listens on `127.0.0.1:47291`. Both sides prove they hold a pairing token, and anything that isn't Hermes Desktop's page is refused by origin. The token sits in a file only your user can read. Pairing is only possible for a minute after the helper is opened, which is what **Connect** does.
 - **Prompts stay private:** audio plays only through Bluetooth headphones, never the Mac's speakers.
 - **Telemetry:** none.
 
 ## Uninstall
 
-Quit Hermes AirPods from the menu bar, then delete `~/Applications/Hermes AirPods.app` and `~/Library/Application Support/Hermes AirPods`. Remove the plugin with `hermes plugins remove airpods-approvals`.
+Turn the plugin off or quit Desktop, and the helper quits. Then delete `~/Applications/Hermes AirPods.app` and `~/Library/Application Support/Hermes AirPods`, remove **Hermes AirPods Gemini key** in Keychain Access, and run `hermes plugins remove airpods-approvals`.
 
 ## Development
 
 ```bash
-scripts/test.sh                 # JS, Python and Swift tests
+scripts/test.sh                 # JS and Swift tests
 python3 scripts/build.py        # regenerate desktop/plugin.js from src/
 hermes plugins validate .
 ```
@@ -100,9 +96,7 @@ hermes plugins validate .
 src/engine.mjs           what's asked, and when an answer may reach Hermes
 src/desktop.js           Desktop plugin shell and settings
 helper/Sources/AirPodsCore     gesture detection and session rules, tested against real recordings
-helper/Sources/HermesAirPods   motion, sound, speech and the local connection
-airpods_core.py          optional Gemini speech
-dashboard/plugin_api.py  the speech route
+helper/Sources/HermesAirPods   motion, sound, Gemini speech, Keychain and the local connection
 ```
 
 MIT licensed. AirPods is a trademark of Apple Inc. This project isn't affiliated with Apple or Nous Research.

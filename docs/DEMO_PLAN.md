@@ -17,7 +17,8 @@ Everything shown is real: a real Hermes agent, real AirPods, real approvals. No 
 
 - Use a harmless command that really needs approval, in a scratch folder.
 - Practise with **Try it** first.
-- Pick the voice before recording. Read [the README](../README.md#the-voice).
+- Paste the Gemini key in settings before recording. Read [the README](../README.md#the-voice).
+- The settings page shows the AirPods' Bluetooth name. Rename them in Bluetooth settings, or keep that row out of shot.
 
 ## Submission
 

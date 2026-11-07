@@ -1,49 +1,31 @@
 import AVFoundation
 
-/// Plays Gemini's audio when the plugin sends it, otherwise uses the Mac's own voice.
-final class Speech: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDelegate {
+/// Plays Gemini's spoken prompt. There is deliberately no fallback voice: if it can't play, nothing is
+/// asked and the request stays on screen.
+final class Speech: NSObject, AVAudioPlayerDelegate {
   private var player: AVAudioPlayer?
-  private let voice = AVSpeechSynthesizer()
   private var finished: (() -> Void)?
 
-  override init() {
-    super.init()
-    voice.delegate = self
-  }
-
-  func say(_ text: String, then done: @escaping () -> Void) {
+  func play(wav: Data, then done: @escaping () -> Void) -> Bool {
     stop()
-    finished = done
-    let utterance = AVSpeechUtterance(string: text)
-    utterance.rate = 0.52
-    voice.speak(utterance)
-  }
-
-  func play(wav: Data, fallback text: String, then done: @escaping () -> Void) {
-    stop()
-    finished = done
-    guard let player = try? AVAudioPlayer(data: wav), player.play() else {
-      say(text, then: done)
-      return
-    }
+    guard let player = try? AVAudioPlayer(data: wav) else { return false }
     player.delegate = self
+    guard player.play() else { return false }
+    finished = done
     self.player = player
+    return true
   }
 
   func stop() {
     finished = nil
     player?.stop()
     player = nil
-    voice.stopSpeaking(at: .immediate)
   }
 
-  private func complete() {
+  func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
     let done = finished
     finished = nil
-    player = nil
+    self.player = nil
     done?()
   }
-
-  func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) { complete() }
-  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) { complete() }
 }

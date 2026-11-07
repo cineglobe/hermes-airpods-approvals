@@ -6,20 +6,21 @@ description: >-
   Hear Hermes approvals and questions in your AirPods and answer with your head: nod to approve,
   shake to deny. Gestures are recognised by rhythm, with a tap in each ear as you go, and drive the
   real approval through approval.respond. A nod only ever approves once, and a timeout or lost
-  AirPods sends nothing. Needs a small native helper, built from source on your Mac, because head
-  motion isn't reachable from a plugin. Disclosure — the helper runs in the menu bar while Desktop
-  is connected, listens on 127.0.0.1 with a paired handshake, and reads head motion only during a
-  question, which never leaves the Mac. No network use by default: the Mac's voice reads prompts.
-  With an optional Gemini key on the Hermes backend, the sentence being read, including the
-  approval's redacted command, is sent to generativelanguage.googleapis.com. On Gemini's free tier,
-  Google may use this content to improve its products. No telemetry.
+  AirPods sends nothing. Desktop-only plugin with a small native helper built from source on your
+  Mac, because head motion isn't reachable from a plugin. Disclosure — the helper runs without a
+  window or menu bar item only while Hermes Desktop is open, listens on 127.0.0.1 with a paired
+  handshake, and reads head motion only during a question, which never leaves the Mac. Prompts are
+  spoken by Gemini: the sentence being read, including the approval's Hermes-redacted command, is
+  sent to generativelanguage.googleapis.com with your Gemini key, which the helper keeps in the
+  macOS Keychain. On Gemini's free tier, Google may use this content to improve its products. No
+  telemetry.
 maintainer: cineglobe
 tier: community
 category: voice
 requires_hermes: ">=0.22.5"
 docs_url: https://github.com/cineglobe/hermes-airpods-approvals#readme
-version: "1.0.0"
-platforms: []
+version: "1.1.0"
+platforms: [macos]
 capabilities:
   provides_tools: []
   provides_hooks: []

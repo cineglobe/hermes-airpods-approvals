@@ -17,11 +17,12 @@ final class Asking {
   private let sounds = Sounds()
   private let speech = Speech()
   private let motion = Motion()
+  private let gemini = GeminiVoice()
   private let send: ([String: Any]) -> Void
   private var active: Active?
   private var clock: Timer?
 
-  private static let speechWait = 6.0
+  private static let speechWait = 10.0
   private static let motionWait = 3.0
   private static let lostAfter = 1.5
 
@@ -34,13 +35,18 @@ final class Asking {
   }
 
   var status: [String: Any] {
-    ["output": AudioRoute.bluetoothOutputName ?? NSNull(), "motionDenied": motion.denied, "motionAvailable": motion.available]
+    [
+      "output": AudioRoute.bluetoothOutputName ?? NSNull(), "motionDenied": motion.denied,
+      "motionAvailable": motion.available, "geminiKey": gemini.hasKey,
+    ]
   }
 
   func handle(_ message: [String: Any]) {
     switch message["type"] as? String {
     case "ask": ask(message)
-    case "speech": speechArrived(message)
+    case "setKey":
+      let saved = gemini.setKey(message["key"] as? String ?? "")
+      send(status.merging(["type": "status", "keySaved": saved]) { a, _ in a })
     case "cancel":
       if message["id"] as? String == active?.id { finish(.cancelled) }
     case "status":
@@ -54,6 +60,10 @@ final class Asking {
     guard let id = message["id"] as? String, let text = message["text"] as? String else { return }
     guard active == nil else {
       send(["type": "ended", "id": id, "reason": "busy"])
+      return
+    }
+    guard gemini.hasKey else {
+      send(["type": "ended", "id": id, "reason": "noKey"])
       return
     }
     guard AudioRoute.bluetoothOutputName != nil, !motion.denied else {
@@ -75,28 +85,25 @@ final class Asking {
     clock?.invalidate()
     clock = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in self?.tick() }
 
-    if message["speechPending"] as? Bool != true {
-      speak(wav: nil)
+    // The chime is already playing while Gemini makes the audio.
+    gemini.audio(for: text) { [weak self] wav in
+      guard let self, self.active?.id == id, self.active?.spoke == false else { return }
+      guard let wav else { self.finish(.noVoice); return }
+      self.speak(wav: wav)
     }
+    if confirm { gemini.audio(for: active?.confirmText ?? "") { _ in } }
   }
 
-  private func speechArrived(_ message: [String: Any]) {
-    guard message["id"] as? String == active?.id, active?.spoke == false else { return }
-    let wav = (message["audio"] as? String).flatMap { Data(base64Encoded: $0) }
-    speak(wav: wav)
-  }
-
-  private func speak(wav: Data?) {
+  private func speak(wav: Data) {
     guard var current = active else { return }
     current.spoke = true
     active = current
-    let done = { [weak self] in self?.spoken() ?? () }
-    if let wav {
-      speech.play(wav: wav, fallback: current.text, then: done)
-    } else {
-      speech.say(current.text, then: done)
+    guard speech.play(wav: wav, then: { [weak self] in self?.spoken() }) else {
+      finish(.noVoice)
+      return
     }
   }
+
 
   private func spoken() {
     guard var current = active else { return }
@@ -124,14 +131,16 @@ final class Asking {
     guard var current = active else { return }
     let time = now
     if !current.spoke, time - current.startedAt > Self.speechWait {
-      speak(wav: nil)
+      finish(.noVoice)
       return
     }
     guard var session = current.session else { return }
     if let last = current.lastSample {
       if time - last > Self.lostAfter { finish(.lost); return }
+    } else if motion.undecided {
+      // macOS is still showing its Motion prompt. The session's own time limit still applies.
     } else if time - current.startedAt > Self.motionWait {
-      finish(.unavailable)
+      finish(.noMotion)
       return
     }
     let effects = session.tick(at: time)
@@ -174,7 +183,13 @@ final class Asking {
         let text = active?.confirmText ?? ""
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
           guard self?.active?.id == id else { return }
-          self?.speech.say(text) { self?.spoken() }
+          self?.gemini.audio(for: text) { wav in
+            guard let self, self.active?.id == id else { return }
+            guard let wav, self.speech.play(wav: wav, then: { [weak self] in self?.spoken() }) else {
+              self.finish(.noVoice)
+              return
+            }
+          }
         }
       case let .answered(answer):
         sounds.stopListening()
@@ -184,7 +199,7 @@ final class Asking {
       case let .ended(reason):
         sounds.stopListening()
         speech.stop()
-        if reason == .timeout || reason == .lost { sounds.missed() }
+        if reason == .timeout || reason == .lost || reason == .noVoice { sounds.missed() }
         send(["type": "ended", "id": id, "reason": reason.rawValue])
         cleanUp(after: 0.4)
       }

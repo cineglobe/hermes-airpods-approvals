@@ -26,7 +26,7 @@ function harness({ result = { answer: 'yes' }, pending = [REQUEST], settings = {
   }
   let n = 0
   const coordinator = new Coordinator({
-    rpc, link, speak: null, settings: () => ({ ...DEFAULT_SETTINGS, ...settings }), newId: () => `id${++n}`, onChange() {}
+    rpc, link, settings: () => ({ ...DEFAULT_SETTINGS, ...settings }), newId: () => `id${++n}`, onChange() {}
   })
   const responses = () => calls.filter(c => c.method.endsWith('.respond'))
   const settled = async () => {
@@ -199,15 +199,6 @@ test('an open question is read aloud and never answered', async () => {
   assert.deepEqual(h.responses(), [])
 })
 
-test('Gemini failing still gets the question spoken', async () => {
-  const h = harness()
-  h.coordinator.speak = async () => { throw new Error('quota') }
-  h.coordinator.offerApproval('s1', REQUEST)
-  await h.settled()
-  await new Promise(r => setTimeout(r, 2))
-  assert.deepEqual(h.sent.filter(m => m.type === 'speech').map(m => m.audio), [null])
-  assert.equal(h.asked[0].speechPending, true)
-})
 
 // ── the helper link ─────────────────────────────────────────────────────────────────────────────
 
@@ -250,6 +241,43 @@ test('a fake helper on the port is refused', async () => {
   await h.say({ type: 'ready', proof: 'forged' })
   assert.equal(h.link.connected, false)
   assert.equal(h.socket.closed, true)
+})
+
+test('the token is offered to an unpaired helper only after Connect', async () => {
+  const quiet = linkHarness()
+  await quiet.say({ type: 'challenge', nonce: 'n', paired: false, pairing: true })
+  assert.equal(quiet.socket.sent.length, 0)
+  assert.equal(quiet.socket.closed, true)
+
+  const h = linkHarness()
+  h.link.pairSoon()
+  await h.say({ type: 'challenge', nonce: 'n', paired: false, pairing: true })
+  assert.deepEqual(h.socket.sent.map(m => m.type), ['pair', 'hello'])
+  assert.equal(h.socket.sent[0].token, 'secret')
+  await h.say({ type: 'ready', proof: await sign('secret', 'helper:client-nonce') })
+  assert.equal(h.link.connected, true)
+})
+
+test('a paired helper never gets the token, even during Connect', async () => {
+  const h = linkHarness()
+  h.link.pairSoon()
+  await h.say({ type: 'challenge', nonce: 'n', paired: true, pairing: false })
+  assert.deepEqual(h.socket.sent.map(m => m.type), ['hello'])
+})
+
+test('reconnecting at startup never offers the token', async () => {
+  const h = linkHarness()
+  await h.say({ type: 'challenge', nonce: 'n', paired: true, pairing: true })
+  assert.deepEqual(h.socket.sent.map(m => m.type), ['hello'])
+})
+
+test('a helper paired with another token is reported', async () => {
+  const h = linkHarness()
+  h.link.pairSoon()
+  await h.say({ type: 'challenge', nonce: 'n', paired: true, pairing: false })
+  h.socket.onclose()
+  assert.equal(h.link.refused, true)
+  assert.equal(h.link.connected, false)
 })
 
 test('an answer before the handshake counts for nothing', async () => {

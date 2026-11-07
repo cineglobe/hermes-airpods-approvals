@@ -1,9 +1,0 @@
-{
-  "name": "airpods-approvals",
-  "label": "AirPods Approvals",
-  "description": "Optional Gemini speech for AirPods Approvals.",
-  "version": "1.0.0",
-  "tab": { "path": "/airpods-approvals", "hidden": true },
-  "entry": "dist/index.js",
-  "api": "plugin_api.py"
-}

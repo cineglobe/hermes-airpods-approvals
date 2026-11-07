@@ -10,6 +10,9 @@ final class Bridge {
   private var listener: NWListener?
   private var trusted: NWConnection?
   private let token: () -> String?
+  /// Whether a pair message would be taken right now: never paired, or Pair Again is open.
+  var pairingOpen: (() -> Bool)?
+  var pair: ((String) -> Bool)?
 
   var onMessage: (([String: Any]) -> Void)?
   var onClient: ((Bool) -> Void)?
@@ -43,7 +46,11 @@ final class Bridge {
     connection.stateUpdateHandler = { [weak self] state in
       switch state {
       case .ready:
-        self?.write(["type": "challenge", "nonce": nonce, "version": 1], to: connection)
+        guard let self else { return }
+        self.write([
+          "type": "challenge", "nonce": nonce, "version": 1,
+          "paired": self.token() != nil, "pairing": self.pairingOpen?() ?? false
+        ], to: connection)
       case .failed, .cancelled:
         self?.dropped(connection)
       default:
@@ -64,6 +71,11 @@ final class Bridge {
       if let data, let message = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
         if self.trusted === connection {
           self.onMessage?(message)
+        } else if message["type"] as? String == "pair" {
+          guard let candidate = message["token"] as? String, self.pair?(candidate) == true else {
+            connection.cancel()
+            return
+          }
         } else if !self.authenticate(connection, message, nonce: nonce) {
           connection.cancel()
           return

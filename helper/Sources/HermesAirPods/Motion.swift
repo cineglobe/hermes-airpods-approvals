@@ -16,6 +16,8 @@ final class Motion: NSObject, CMHeadphoneMotionManagerDelegate {
     queue.maxConcurrentOperationCount = 1
   }
 
+  /// The first question shows macOS's Motion prompt, so readings can't be expected until it's answered.
+  var undecided: Bool { CMHeadphoneMotionManager.authorizationStatus() == .notDetermined }
   var available: Bool { manager.isDeviceMotionAvailable }
   var denied: Bool {
     let status = CMHeadphoneMotionManager.authorizationStatus()

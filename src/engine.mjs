@@ -6,14 +6,14 @@
 // the prompt stays on screen and Hermes' own timeout denies it.
 
 export const HELPER_URL = 'ws://127.0.0.1:47291'
-export const PAIR_LINK = 'hermes-airpods://pair'
+// Desktop opens a bare local path with macOS, which starts the helper. Custom URL schemes are refused.
+export const HELPER_APP = '~/Applications/Hermes AirPods.app'
 
 export const DEFAULT_SETTINGS = {
   enabled: true,
   confirmApprovals: false,
   listenSeconds: 8,
   questions: true,
-  geminiVoice: true
 }
 
 const SEEN_LIMIT = 300
@@ -73,6 +73,15 @@ export class HelperLink {
     this.waiting = new Map()
     this.progress = () => {}
     this.closed = false
+    // Set only when the user presses Connect. The token is never offered to the helper otherwise,
+    // so something squatting on the port can't collect it in the background.
+    this.pairUntil = 0
+    this.refused = false
+  }
+
+  pairSoon(now = Date.now()) {
+    this.pairUntil = now + 20000
+    this.refused = false
   }
 
   get connected() {
@@ -98,11 +107,17 @@ export class HelperLink {
   }
 
   retry() {
-    if (!this.closed) this.setTimer(() => this.connect(), 3000)
+    if (!this.closed) this.setTimer(() => this.connect(), Date.now() < this.pairUntil ? 700 : 3000)
   }
 
   dropped(socket) {
     if (socket !== this.socket) return
+    // The helper hung up after our hello during a Connect: it is paired with another token.
+    if (!this.trusted && this.offered) {
+      this.refused = true
+      this.pairUntil = 0
+    }
+    this.offered = false
     this.socket = null
     this.trusted = false
     this.onChange()
@@ -127,14 +142,24 @@ export class HelperLink {
 
     if (!this.trusted) {
       if (message.type === 'challenge') {
+        const pairing = Date.now() < this.pairUntil
+        if (pairing && (message.paired === false || message.pairing === true)) {
+          socket.send(JSON.stringify({ type: 'pair', token: secret }))
+        } else if (message.paired === false) {
+          socket.close()
+          return
+        }
         const proof = await this.sign(secret, `plugin:${message.nonce}`)
         socket.send(JSON.stringify({ type: 'hello', nonce: clientNonce, proof }))
+        this.offered = pairing
       } else if (message.type === 'ready') {
         if (message.proof !== (await this.sign(secret, `helper:${clientNonce}`))) {
           socket.close()
           return
         }
         this.trusted = true
+        this.pairUntil = 0
+        this.refused = false
         this.status = message
         this.onChange()
       }
@@ -170,8 +195,8 @@ export class HelperLink {
 
 // Decides what to ask and carries answers back to Hermes, one prompt at a time.
 export class Coordinator {
-  constructor({ rpc, link, speak, settings, newId, onChange }) {
-    Object.assign(this, { rpc, link, speak, settings, newId, onChange })
+  constructor({ rpc, link, settings, newId, onChange }) {
+    Object.assign(this, { rpc, link, settings, newId, onChange })
     this.queue = []
     this.seen = new Set()
     this.current = null
@@ -236,16 +261,11 @@ export class Coordinator {
   }
 
   async ask(item, text, { confirm = false, mode = 'gesture' } = {}) {
-    const { listenSeconds, geminiVoice } = this.settings()
+    const { listenSeconds } = this.settings()
     const id = this.newId()
     item.askId = id
-    const pending = this.link.ask({ id, mode, text, listenSeconds, confirm, speechPending: Boolean(geminiVoice && this.speak) })
-    if (geminiVoice && this.speak) {
-      Promise.resolve()
-        .then(() => this.speak(text))
-        .catch(() => null)
-        .then(audio => this.link.send({ type: 'speech', id, audio: audio || null }))
-    }
+    // The helper fetches Gemini's voice itself, so the key never leaves the Mac's Keychain.
+    const pending = this.link.ask({ id, mode, text, listenSeconds, confirm })
     const result = await pending
     item.askId = null
     return result

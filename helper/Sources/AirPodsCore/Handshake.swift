@@ -22,9 +22,9 @@ public enum Handshake {
     return bytes.map { String(format: "%02x", $0) }.joined()
   }
 
-  /// Browsers send their page's origin, so a website can never reach the helper.
+  /// Hermes Desktop's page sends `file://`. Browsers send their page's origin, and sandboxed frames
+  /// send `null`, so no website can reach the helper.
   public static func allows(origin: String?) -> Bool {
-    guard let origin else { return false }
-    return origin == "file://" || origin == "null"
+    origin == "file://"
   }
 }

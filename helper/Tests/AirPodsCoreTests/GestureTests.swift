@@ -245,5 +245,27 @@ final class HandshakeTests: XCTestCase {
     XCTAssertFalse(Handshake.allows(origin: "https://example.com"))
     XCTAssertFalse(Handshake.allows(origin: "http://localhost:3000"))
     XCTAssertFalse(Handshake.allows(origin: nil))
+    XCTAssertFalse(Handshake.allows(origin: "null"))
+  }
+}
+
+final class GeminiReplyTests: XCTestCase {
+  private func reply(_ audio: Data) -> Data {
+    let body: [String: Any] = ["candidates": [["content": ["parts": [["text": "ok"], ["inlineData": ["mimeType": "audio/wav", "data": audio.base64EncodedString()]]]]]]]
+    return try! JSONSerialization.data(withJSONObject: body)
+  }
+
+  func testWavAudioIsUsed() {
+    let wav = Data("RIFF....WAVEfmt ".utf8)
+    XCTAssertEqual(GeminiReply.wav(from: reply(wav)), wav)
+  }
+
+  func testRawAudioIsRefused() {
+    XCTAssertNil(GeminiReply.wav(from: reply(Data([0, 1, 2, 3, 4]))))
+  }
+
+  func testErrorsAndJunkGiveNoVoice() {
+    XCTAssertNil(GeminiReply.wav(from: Data(#"{"error":{"code":429}}"#.utf8)))
+    XCTAssertNil(GeminiReply.wav(from: Data("not json".utf8)))
   }
 }

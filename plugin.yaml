@@ -1,8 +1,8 @@
 name: airpods-approvals
-version: 1.0.0
+version: 1.1.0
 manifest_version: 2
 api_version: 1
-description: "Hear Hermes approvals and questions in your AirPods and answer with a nod or a shake. Needs a small native helper on the Mac."
+description: "Hear Hermes approvals and questions in your AirPods and answer with a nod or a shake. Hermes Desktop on macOS only, with a small helper app built on your Mac from source."
 author: cineglobe
 license: MIT
 homepage: https://github.com/cineglobe/hermes-airpods-approvals
@@ -10,24 +10,7 @@ kind: standalone
 requires_hermes: ">=0.22.5"
 tags: [voice, approvals, airpods, desktop, accessibility]
 platforms:
-  - linux
   - macos
 provides_tools: []
 provides_hooks: []
 requires_env: []
-config_schema:
-  api_key:
-    type: secret
-    env: AIRPODS_APPROVALS_GEMINI_KEY
-    label: "Gemini API key"
-    description: "Optional, for the Gemini voice. Without one the Mac's own voice is used. GEMINI_API_KEY, GOOGLE_API_KEY and GEMINI_LIVE_API_KEY also work."
-  tts_model:
-    type: str
-    default: gemini-3.8-flash-tts
-    label: "Speech model"
-    choices: [gemini-3.8-flash-tts, gemini-3.8-flash-lite-tts]
-  voice:
-    type: str
-    default: Kore
-    label: "Voice"
-    choices: [Kore, Puck, Charon, Fenrir, Aoede, Leda, Orus, Zephyr, Laomedeia, Sulafat]
