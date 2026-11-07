@@ -21,14 +21,75 @@ let plugin = null
 let link = null
 let coordinator = null
 
+// ── voice calls (Gemini Live) ───────────────────────────────────────────────────────────────────
+// Plugins talk through window events: `hermes:voice-call` says which session a call is handling and
+// whether its voice is speaking. While it is, the call asks and this plugin only opens the gesture
+// window, then reports the answer with `hermes:approval-answered`.
+
+let call = { active: false, sessionId: null, speaking: false }
+
+function hearCall(event) {
+  const detail = (event && event.detail) || {}
+  call = { active: Boolean(detail.active), sessionId: detail.sessionId || null, speaking: Boolean(detail.active && detail.speaking) }
+}
+
+const CALL_QUIET_MS = 600
+const CALL_START_MS = 8000
+const CALL_LONGEST_MS = 25000
+
+// Resolves once the call's voice has spoken and gone quiet, or soon if it never starts.
+function waitForCallTurn() {
+  return new Promise(resolve => {
+    const began = Date.now()
+    let spoke = false
+    let quietSince = 0
+    const timer = setInterval(() => {
+      const now = Date.now()
+      let done = !call.active || now - began > CALL_LONGEST_MS || (!spoke && now - began > CALL_START_MS)
+      if (call.speaking) {
+        spoke = true
+        quietSince = 0
+      } else if (spoke) {
+        quietSince = quietSince || now
+        done = done || now - quietSince >= CALL_QUIET_MS
+      }
+      if (done) {
+        clearInterval(timer)
+        resolve()
+      }
+    }, 100)
+  })
+}
+
+function voiceCall(sessionId) {
+  return call.active && sessionId && call.sessionId === sessionId ? { waitForTurn: waitForCallTurn } : null
+}
+
+function announceAnswer(detail) {
+  window.dispatchEvent(new CustomEvent('hermes:approval-answered', { detail }))
+}
+
+let gesturesSaid = null
+
+// Tells a call whether it can offer "nod or shake".
+function announceGestures(force = false) {
+  const state = $state.get()
+  const ready = Boolean($settings.get().enabled && state.helper === 'ready' && state.output && !state.motionDenied)
+  if (!force && ready === gesturesSaid) return
+  gesturesSaid = ready
+  window.dispatchEvent(new CustomEvent('hermes:airpods-gestures', { detail: { source: 'airpods-approvals', ready } }))
+}
+
 function patch(values) {
   $state.set({ ...$state.get(), ...values })
+  if (link) announceGestures()
 }
 
 function saveSettings(values) {
   const next = { ...$settings.get(), ...values }
   $settings.set(next)
   plugin.storage.set('settings', next)
+  announceGestures()
 }
 
 function randomHex(bytes) {
@@ -93,7 +154,7 @@ function hearProgress(message) {
 // ── hearing Hermes ──────────────────────────────────────────────────────────────────────────────
 
 function hearEvent(event) {
-  if (!event || !event.session_id || !link.connected || !link.status.geminiKey) return
+  if (!event || !event.session_id || !link.connected || !(link.status.geminiKey || voiceCall(event.session_id))) return
   const payload = event.payload || {}
   if (event.type === 'approval.request') {
     coordinator.offerApproval(event.session_id, { ...payload, request_id: payload.request_id || payload.prompt_id })
@@ -110,7 +171,7 @@ function hearEvent(event) {
 let polling = false
 
 async function poll() {
-  if (polling || !$settings.get().enabled || !link.connected || !link.status.geminiKey) return
+  if (polling || !$settings.get().enabled || !link.connected || !(link.status.geminiKey || call.active)) return
   polling = true
   try {
     const focused = host.state.focusedSessionId.get()
@@ -195,7 +256,7 @@ const REASONS = {
 
 function outcomeText(last) {
   if (!last) return 'Nothing asked yet'
-  const text = { approved: 'Approved', denied: 'Denied', answered: `Answered: ${last.detail}`, read: 'Read aloud', stale: 'Already answered on screen', error: 'Could not send that answer' }
+  const text = { approved: 'Approved', denied: 'Denied', answered: `Answered: ${last.detail}`, read: 'Read aloud', stale: 'Already answered on screen', call: 'Left to Gemini Live', error: 'Could not send that answer' }
   if (last.outcome === 'unanswered') return `${REASONS[last.detail] || 'No answer given'}, left on screen`
   return text[last.outcome] || last.outcome
 }
@@ -307,8 +368,15 @@ export default {
       link,
       settings: () => $settings.get(),
       newId: () => randomHex(8),
-      onChange: syncCoordinator
+      onChange: syncCoordinator,
+      voiceCall,
+      announce: announceAnswer
     })
+
+    ctx.addEventListener(window, 'hermes:voice-call', hearCall)
+    ctx.addEventListener(window, 'hermes:airpods-gestures-query', () => announceGestures(true))
+    window.dispatchEvent(new CustomEvent('hermes:voice-call-query'))
+    ctx.onDispose(() => window.dispatchEvent(new CustomEvent('hermes:airpods-gestures', { detail: { source: 'airpods-approvals', ready: false } })))
 
     ctx.onEvent('*', hearEvent)
     ctx.setInterval(() => void poll(), POLL_MS)

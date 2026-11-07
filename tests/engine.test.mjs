@@ -204,17 +204,68 @@ test('the helper hears how each answer landed', async () => {
   const yes = harness()
   yes.coordinator.offerApproval('s1', REQUEST)
   await yes.settled()
-  assert.deepEqual(yes.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'approved' }])
+  assert.deepEqual(yes.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'approved', quiet: false }])
 
   const no = harness({ result: { answer: 'no' } })
   no.coordinator.offerApproval('s1', REQUEST)
   await no.settled()
-  assert.deepEqual(no.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'denied' }])
+  assert.deepEqual(no.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'denied', quiet: false }])
 
   const late = harness({ pending: [] })
   late.coordinator.offerApproval('s1', REQUEST)
   await late.settled()
-  assert.deepEqual(late.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'failed' }])
+  assert.deepEqual(late.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'failed', quiet: false }])
+})
+
+// ── on a Gemini Live call ───────────────────────────────────────────────────────────────────────
+
+function onCall(h, sessionId = 's1') {
+  const turns = []
+  const announced = []
+  h.coordinator.voiceCall = id => (id === sessionId ? { waitForTurn: async () => { turns.push(id) } } : null)
+  h.coordinator.announce = detail => announced.push(detail)
+  return { turns, announced }
+}
+
+test('on a call, the call speaks and only the gesture window opens here', async () => {
+  const h = harness()
+  const call = onCall(h)
+  h.coordinator.offerApproval('s1', REQUEST)
+  await h.settled()
+  assert.deepEqual(call.turns, ['s1'])
+  assert.equal(h.asked[0].silent, true)
+  assert.deepEqual(h.responses().map(r => r.params.choice), ['once'])
+  assert.deepEqual(h.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'approved', quiet: true }])
+  assert.deepEqual(call.announced, [{ source: 'airpods-approvals', sessionId: 's1', requestId: 'r1', choice: 'once' }])
+})
+
+test('on a call, an approval answered by voice first is left alone', async () => {
+  const h = harness()
+  h.coordinator.voiceCall = () => ({ waitForTurn: async () => { h.state.pending = [] } })
+  h.coordinator.offerApproval('s1', REQUEST)
+  await h.settled()
+  assert.equal(h.asked.length, 0)
+  assert.equal(h.responses().length, 0)
+  assert.equal(h.coordinator.last.outcome, 'call')
+})
+
+test('a call on another session changes nothing here', async () => {
+  const h = harness()
+  const call = onCall(h, 'other')
+  h.coordinator.offerApproval('s1', REQUEST)
+  await h.settled()
+  assert.equal(h.asked[0].silent, false)
+  assert.deepEqual(call.turns, [])
+  assert.deepEqual(h.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'approved', quiet: false }])
+})
+
+test('on a call, questions are left to the call', async () => {
+  const h = harness()
+  onCall(h)
+  h.coordinator.offerQuestion('s1', 'p1', { questions: [{ qid: 'q', question: 'Keep it?', choices: ['Keep', 'Drop'] }] })
+  await h.settled()
+  assert.equal(h.asked.length, 0)
+  assert.equal(h.responses().length, 0)
 })
 
 // ── the helper link ─────────────────────────────────────────────────────────────────────────────

@@ -9,6 +9,8 @@ final class Asking {
     var session: GestureSession?
     let text: String
     let confirmText: String
+    /// On a voice call the call asks, so nothing is spoken here: only the listening tone and taps.
+    let silent: Bool
     var spoke = false
     var lastSample: TimeInterval?
     let startedAt: TimeInterval
@@ -50,7 +52,7 @@ final class Asking {
       sounds.start()
       sounds.landed(outcome)
       let words = ["approved": "Approved.", "denied": "Denied."]
-      if let text = words[outcome], gemini.hasKey, active == nil {
+      if let text = words[outcome], message["quiet"] as? Bool != true, gemini.hasKey, active == nil {
         gemini.word(text) { [weak self] wav in
           guard let self, self.active == nil, let wav else { return }
           DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -80,7 +82,8 @@ final class Asking {
       send(["type": "ended", "id": id, "reason": "busy"])
       return
     }
-    guard gemini.hasKey else {
+    let silent = message["silent"] as? Bool ?? false
+    guard silent || gemini.hasKey else {
       send(["type": "ended", "id": id, "reason": "noKey"])
       return
     }
@@ -95,13 +98,18 @@ final class Asking {
     active = Active(
       id: id,
       session: listenOnly ? GestureSession(listenSeconds: seconds, requireConfirm: confirm) : nil,
-      text: text, confirmText: message["confirmText"] as? String ?? "Nod again to approve.", startedAt: now)
+      text: text, confirmText: message["confirmText"] as? String ?? "Nod again to approve.", silent: silent, startedAt: now)
 
     sounds.start()
-    sounds.chime()
     if listenOnly { motion.start() }
     clock?.invalidate()
     clock = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in self?.tick() }
+    if silent {
+      active?.spoke = true
+      spoken()
+      return
+    }
+    sounds.chime()
 
     // The chime is already playing while Gemini makes the audio.
     gemini.audio(for: text) { [weak self] wav in
@@ -199,8 +207,13 @@ final class Asking {
         sounds.finished(yes: true)
         send(["type": "progress", "id": id, "state": "confirm", "beats": 0])
         let text = active?.confirmText ?? ""
+        let silent = active?.silent ?? false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
           guard self?.active?.id == id else { return }
+          if silent {
+            self?.spoken()
+            return
+          }
           self?.gemini.audio(for: text) { wav in
             guard let self, self.active?.id == id else { return }
             guard let wav, self.speech.play(wav: wav, then: { [weak self] in self?.spoken() }) else {

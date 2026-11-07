@@ -195,8 +195,11 @@ export class HelperLink {
 
 // Decides what to ask and carries answers back to Hermes, one prompt at a time.
 export class Coordinator {
-  constructor({ rpc, link, settings, newId, onChange }) {
-    Object.assign(this, { rpc, link, settings, newId, onChange })
+  // voiceCall(sessionId) returns { waitForTurn } while a voice call (Gemini Live) is handling that
+  // session, so the call's voice asks and only the gesture window opens here. announce(detail) tells
+  // the call how an approval was answered.
+  constructor({ rpc, link, settings, newId, onChange, voiceCall = () => null, announce = () => {} }) {
+    Object.assign(this, { rpc, link, settings, newId, onChange, voiceCall, announce })
     this.queue = []
     this.seen = new Set()
     this.current = null
@@ -255,20 +258,21 @@ export class Coordinator {
     this.running = false
   }
 
-  note(item, outcome, detail) {
+  note(item, outcome, detail, { quiet = false } = {}) {
     this.last = { kind: item.kind, outcome, detail: detail || '' }
-    // Once Hermes has taken the answer, the helper plays how it landed.
+    // Once Hermes has taken the answer, the helper plays how it landed. On a call, the call's own
+    // voice says the words, so the helper only plays the sound.
     const sound = { approved: 'approved', denied: 'denied', answered: 'approved', stale: 'failed', error: 'failed' }[outcome]
-    if (sound) this.link.send({ type: 'result', outcome: sound })
+    if (sound) this.link.send({ type: 'result', outcome: sound, quiet })
     this.onChange()
   }
 
-  async ask(item, text, { confirm = false, mode = 'gesture' } = {}) {
+  async ask(item, text, { confirm = false, mode = 'gesture', silent = false } = {}) {
     const { listenSeconds } = this.settings()
     const id = this.newId()
     item.askId = id
     // The helper fetches Gemini's voice itself, so the key never leaves the Mac's Keychain.
-    const pending = this.link.ask({ id, mode, text, listenSeconds, confirm })
+    const pending = this.link.ask({ id, mode, text, listenSeconds, confirm, silent })
     const result = await pending
     item.askId = null
     return result
@@ -282,7 +286,16 @@ export class Coordinator {
 
   async runApproval(item) {
     const { request, sessionId } = item
-    const result = await this.ask(item, approvalSpeech(request), { confirm: this.settings().confirmApprovals })
+    const call = this.voiceCall(sessionId)
+    if (call) {
+      // Let the call's voice ask first. It may also be answered by voice or on screen meanwhile.
+      await call.waitForTurn()
+      if (!(await this.stillWaiting(item))) {
+        this.note(item, 'call')
+        return
+      }
+    }
+    const result = await this.ask(item, approvalSpeech(request), { confirm: this.settings().confirmApprovals, silent: Boolean(call) })
     if (!result.answer) {
       this.note(item, 'unanswered', result.reason)
       return
@@ -294,7 +307,8 @@ export class Coordinator {
       return
     }
     await this.rpc('approval.respond', { session_id: sessionId, request_id: request.request_id, choice }, 30000)
-    this.note(item, choice === 'once' ? 'approved' : 'denied')
+    this.note(item, choice === 'once' ? 'approved' : 'denied', '', { quiet: Boolean(call) })
+    this.announce({ source: 'airpods-approvals', sessionId, requestId: request.request_id, choice })
   }
 
   async answerQuestion(item, plan, answer) {
@@ -303,6 +317,11 @@ export class Coordinator {
   }
 
   async runQuestion(item) {
+    // On a call, the call's voice handles questions.
+    if (this.voiceCall(item.sessionId)) {
+      this.note(item, 'call')
+      return
+    }
     const plan = questionPlan(item.params || {})
     if (plan.mode === 'read') {
       await this.ask(item, plan.text, { mode: 'say' })
