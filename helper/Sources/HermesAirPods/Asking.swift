@@ -111,11 +111,22 @@ final class Asking {
     }
     sounds.chime()
 
-    // The chime is already playing while Gemini makes the audio.
-    gemini.audio(for: text) { [weak self] wav in
-      guard let self, self.active?.id == id, self.active?.spoke == false else { return }
-      guard let wav else { self.finish(.noVoice); return }
-      self.speak(wav: wav)
+    // The chime is already playing while Gemini makes the audio. An approval is first turned into
+    // a short "Can I…?" question; if that fails a check, the exact wording is read.
+    let say = { [weak self] (line: String) in
+      self?.gemini.audio(for: line) { wav in
+        guard let self, self.active?.id == id, self.active?.spoke == false else { return }
+        guard let wav else { self.finish(.noVoice); return }
+        self.speak(wav: wav)
+      }
+    }
+    if let facts = message["rephrase"] as? [String: Any], let command = facts["command"] as? String, !command.isEmpty {
+      gemini.question(description: facts["description"] as? String ?? "", command: command) { [weak self] question in
+        guard self?.active?.id == id else { return }
+        say(question ?? text)
+      }
+    } else {
+      say(text)
     }
     if confirm { gemini.audio(for: active?.confirmText ?? "") { _ in } }
   }

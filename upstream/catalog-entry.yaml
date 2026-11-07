@@ -10,9 +10,9 @@ description: >-
   Mac, because head motion isn't reachable from a plugin. Disclosure — the helper runs without a
   window or menu bar item only while Hermes Desktop is open, listens on 127.0.0.1 with a paired
   handshake, and reads head motion only during a question, which never leaves the Mac. Prompts are
-  spoken by Gemini: the sentence being read, including the approval's Hermes-redacted command, is
-  sent to generativelanguage.googleapis.com with your Gemini key, which the helper keeps in the
-  macOS Keychain. On Gemini's free tier, Google may use this content to improve its products. No
+  written and spoken by Gemini: the approval's description and Hermes-redacted command are sent to
+  generativelanguage.googleapis.com to phrase a short question and to speak it, using your Gemini
+  key, which the helper keeps in the macOS Keychain. On Gemini's free tier, Google may use this content to improve its products. No
   telemetry.
 maintainer: cineglobe
 tier: community

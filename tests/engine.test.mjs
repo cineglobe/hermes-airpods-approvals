@@ -217,6 +217,14 @@ test('the helper hears how each answer landed', async () => {
   assert.deepEqual(late.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'failed', quiet: false }])
 })
 
+test('approvals go out with the facts for a short question, and the exact wording as fallback', async () => {
+  const h = harness()
+  h.coordinator.offerApproval('s1', REQUEST)
+  await h.settled()
+  assert.deepEqual(h.asked[0].rephrase, { description: 'recursive delete', command: 'rm -rf /tmp/demo' })
+  assert.equal(h.asked[0].text, approvalSpeech(REQUEST))
+})
+
 // ── on a Gemini Live call ───────────────────────────────────────────────────────────────────────
 
 function onCall(h, sessionId = 's1') {
@@ -234,6 +242,7 @@ test('on a call, the call speaks and only the gesture window opens here', async 
   await h.settled()
   assert.deepEqual(call.turns, ['s1'])
   assert.equal(h.asked[0].silent, true)
+  assert.equal(h.asked[0].rephrase, undefined)
   assert.deepEqual(h.responses().map(r => r.params.choice), ['once'])
   assert.deepEqual(h.sent.filter(m => m.type === 'result'), [{ type: 'result', outcome: 'approved', quiet: true }])
   assert.deepEqual(call.announced, [{ source: 'airpods-approvals', sessionId: 's1', requestId: 'r1', choice: 'once' }])

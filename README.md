@@ -4,7 +4,7 @@ When your Hermes agent needs a yes or no, it asks in your AirPods and you answer
 
 ## How it feels
 
-1. A chime, then Hermes reads out what it wants to do.
+1. A chime, then a short question like "Can I clear out the old build folder?"
 2. A soft tone starts. It's listening.
 3. Hit three quick beats. Each one taps: a shake taps low in the ear you turned towards, and a nod taps from above and below. The taps get louder as you go.
 4. A confirmation sound, and the agent carries on.
@@ -34,7 +34,8 @@ A glance is as fast as a shake, so speed alone isn't safe. Gestures are recognis
 - Before answering, the plugin checks that the same request is still waiting, with the same command.
 - A timeout, AirPods coming out, or the helper stopping sends nothing. The prompt stays on screen and Hermes' own timeout denies it.
 - Turn on **Nod twice to approve** for a second round before anything runs. It's off by default.
-- The closing instruction is always added by the plugin, so text inside a command can't change what a nod means.
+- The short question is written by Gemini from the command, told to mention anything destructive, irreversible or that sends data away, and to treat the command as data. Replies over 25 words, without a question, or mentioning nods, shakes, approving or denying are thrown away, and the exact wording is read instead: "Hermes needs your approval. The command is: …". The exact command always stays on screen.
+- What a nod or shake means is fixed in the helper, so nothing spoken can change it.
 
 It reduces misreads rather than removing them. If you nod along to something during the listening window, that could count. For commands you'd never want run by accident, leave Hermes' prompts on screen and turn this off, or turn on **Nod twice to approve**.
 
@@ -73,7 +74,7 @@ Prompts are read by Gemini (`gemini-3.8-flash-tts`). The key goes from the setti
 
 ## What it sends, reads and runs
 
-- **Network:** the helper sends each prompt to `generativelanguage.googleapis.com` to be spoken. Nothing else.
+- **Network:** the helper sends each approval's description and command to `generativelanguage.googleapis.com` to write the short question (`gemini-flash-lite-latest`), and each prompt to be spoken. Nothing else.
 - **Sent to Gemini:** the sentence being read: the approval's description and command, or the question and its choices. Hermes redacts secrets in commands first, but treat what's spoken as sent to Google. On Gemini's free tier, Google may use content to improve its products.
 - **Credentials:** your Gemini key, kept in the login Keychain by the helper and sent only to Google.
 - **Head motion:** read only while a question is open, handled on the Mac and never stored or sent anywhere. Only the answer leaves the helper.

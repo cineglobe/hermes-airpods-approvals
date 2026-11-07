@@ -275,12 +275,14 @@ class Coordinator {
     this.onChange()
   }
 
-  async ask(item, text, { confirm = false, mode = 'gesture', silent = false } = {}) {
+  async ask(item, text, { confirm = false, mode = 'gesture', silent = false, rephrase = null } = {}) {
     const { listenSeconds } = this.settings()
     const id = this.newId()
     item.askId = id
     // The helper fetches Gemini's voice itself, so the key never leaves the Mac's Keychain.
-    const pending = this.link.ask({ id, mode, text, listenSeconds, confirm, silent })
+    // With rephrase, the helper asks Gemini for a short "Can I…?" question and reads `text`, the
+    // exact wording, if that fails its checks.
+    const pending = this.link.ask({ id, mode, text, listenSeconds, confirm, silent, ...(rephrase ? { rephrase } : {}) })
     const result = await pending
     item.askId = null
     return result
@@ -303,7 +305,8 @@ class Coordinator {
         return
       }
     }
-    const result = await this.ask(item, approvalSpeech(request), { confirm: this.settings().confirmApprovals, silent: Boolean(call) })
+    const rephrase = call ? null : { description: clip(request.description, 300), command: clip(request.command, 600) }
+    const result = await this.ask(item, approvalSpeech(request), { confirm: this.settings().confirmApprovals, silent: Boolean(call), rephrase })
     if (!result.answer) {
       this.note(item, 'unanswered', result.reason)
       return

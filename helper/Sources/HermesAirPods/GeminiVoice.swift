@@ -61,6 +61,38 @@ final class GeminiVoice {
 
   // MARK: Speech
 
+  private var questions: [String: String] = [:]
+
+  /// A short "Can I…?" question for an approval, or nil (then the exact wording is read). Gives up
+  /// after a few seconds so the prompt is never held up for long.
+  func question(description: String, command: String, then done: @escaping (String?) -> Void) {
+    let cacheKey = description + "\u{0}" + command
+    if let hit = questions[cacheKey] {
+      done(hit)
+      return
+    }
+    guard hasKey, let key = Self.readKey(),
+      let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(SpokenQuestion.model):generateContent")
+    else {
+      done(nil)
+      return
+    }
+    var request = URLRequest(url: url, timeoutInterval: 4)
+    request.httpMethod = "POST"
+    request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try? JSONSerialization.data(withJSONObject: SpokenQuestion.requestBody(description: description, command: command))
+    session.dataTask(with: request) { [weak self] data, response, _ in
+      let status = (response as? HTTPURLResponse)?.statusCode
+      let question = status == 200 ? data.flatMap(SpokenQuestion.text(from:)).flatMap(SpokenQuestion.accept) : nil
+      if let status, status != 200 { NSLog("Hermes AirPods: question model returned \(status), reading the exact wording") }
+      DispatchQueue.main.async {
+        if let question { self?.questions[cacheKey] = question }
+        done(question)
+      }
+    }.resume()
+  }
+
   /// Fixed words like "Approved." are kept on disk, so they cost one Gemini call ever. Prompts are
   /// never written to disk, because they contain commands.
   private static let savedWords = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
